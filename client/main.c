@@ -13,9 +13,8 @@
 int main(int argc, char **argv) {
 	SOCKET s;
 	if((s = create_socket()) != 0) {
-		puts("porcoddio");
+		puts("Errore nella creazione del socket");
 	}
-	puts("porcamadonna");
 	return 0;
 }
 
