@@ -7,7 +7,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef _WIN32
-#include "C:\Users\and22\git\super-happiness\Debug\client\windows\ms.h"
+#include "windows/ms.h"
+#else
+#include "unix/unix.h"
 #endif
 
 int main(int argc, char **argv) {
