@@ -12,8 +12,9 @@
 #include <windows.h>
 #include <ws2tcpip.h>
 
+SOCKET sock;
 
-SOCKET* create_socket() {
+SOCKET create_socket() {
 	//socket
 	SOCKET sock;
 	//initializing win socket structure
@@ -27,7 +28,7 @@ SOCKET* create_socket() {
 	}
 
 	//socket successfully created
-	return &sock;
+	return sock;
 }
 
 
