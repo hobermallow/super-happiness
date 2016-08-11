@@ -23,9 +23,10 @@ int create_socket() {
 	//create socket
 	if((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		//return -1 if socket is not created
-		return -1;
+		puts("Error while creating socket");
+		exit(-1);
 	}
-	puts("Socket created");
+	puts("Socket successfully created");
 	//return value of socket fd
 	return s;
 }

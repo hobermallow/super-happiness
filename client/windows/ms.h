@@ -19,14 +19,18 @@ SOCKET create_socket() {
 	SOCKET sock;
 	//initializing win socket structure
 	WSADATA wsa;
+	puts("Initializing windows socket structure...");
 	if(WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
-		return -1;
+		puts("Error in Windows socket structure initialization");
+		exit(-1);
 	}
+	puts("Creating socket...");
 	//create socket
 	if((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-		return -1;
+		puts("Error while creating socket...");
+		exit(-1);
 	}
-
+	puts("Socket successfully created");
 	//socket successfully created
 	return sock;
 }
