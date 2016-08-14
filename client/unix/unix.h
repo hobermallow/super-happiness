@@ -10,7 +10,11 @@
 #include <sys/socket.h>
 #include <sys/socketvar.h>
 #include <sys/types.h>
+#include <sys/file.h>
+#include <sys/mman.h>
 #include <netinet/in.h>
+#include <stdbool.h>
+#include <pthread.h>
 #include "../utils.h"
 
 
@@ -110,6 +114,8 @@ conf_file_t* read_lines(FILE* conf_file) {
 void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	//variables
 
+	//value for setsockopt
+	int value = 1;
 	//bytes read
 	int bytes, sender_size;
 	//socket
@@ -118,21 +124,39 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	char buffer[4096];
 	//client address info
 	struct sockaddr_in client, sender;
+	//mutex
+	pthread_mutex_t mutex;
+	pthread_mutexattr_t mutex_attr;
 
 	client.sin_addr.s_addr = INADDR_ANY;
 	client.sin_port = htons((unsigned int)9090);
 	client.sin_family = AF_INET;
 
 	sock = create_socket();
+	//preventing error "Address already in use"
+	setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
+	setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value));
+
 	//binding socket to 9090 port and server address
 	if(bind(sock,(struct sockaddr*) &client, sizeof(client)) != 0){
-		perror("");
+		perror("Binding error: ");
 		exit(-1);
 	}
 
+	//mutex initializing
+	pthread_mutexattr_init(&mutex_attr);
+	pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
+	pthread_mutex_init(&mutex, &mutex_attr);
+
+	shm_open()
+
+	//
+
 	while(1) {
+
+
 		//receiving bytes and saving onto temporary struct sockaddr_in
-		bytes = recvfrom(sock, buffer, 4096, 0, &sender, &sender_size);
+		bytes = recvfrom(sock, buffer, 4096, MSG_PEEK, &sender, &sender_size);
 		printf("Bytes read: %d\n", bytes);
 		if(bytes == -1) {
 			perror("");
