@@ -11,9 +11,9 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <ws2tcpip.h>
+#include <stdbool.h>
 #include "../utils.h"
 
-SOCKET sock;
 
 SOCKET create_socket() {
 	//socket
@@ -28,7 +28,7 @@ SOCKET create_socket() {
 	puts("[OK]");
 	printf("Creating socket... ");
 	//create socket
-	if((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+	if((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
 		puts("Error while creating socket...");
 		exit(-1);
 	}
@@ -49,47 +49,49 @@ void convert_ip_to_address(const char* ip, struct sockaddr_in* addr) {
 }
 
 //read file lines, returning a pointer to pointer
-path_t** read_lines(FILE* conf_file) {
+conf_file_t* read_lines(FILE* conf_file) {
 	//path structure array
-	path_t** array;
+	conf_file_t* paths;
 	//array index-iterator
 	int i, j, byte_read, line_size = 100, num_lines = 100;
 	//temp buffer for reading character
 	char* temp;
+    //initializing pointer to conf file struct
+    paths = malloc(sizeof(conf_file_t*));
 	//initializing number of lines (100 lines)
-	array = malloc(sizeof(path_t*)*100);
+    paths->paths = malloc(sizeof(path_t*)*100);
 	//read file line by line
 	for(i = 0; ; i++) {
 		if(i > num_lines) {
 			num_lines += 100;
 			//realloc of array size
-			realloc(array, sizeof(path_t*)*num_lines);
+			realloc(paths->paths, sizeof(path_t*)*num_lines);
 		}
 		//repristinating line_size
 		line_size = 100;
 		//initializing path_t structure for corresponding line
-		array[i] = malloc(sizeof(path_t));
+		paths->paths[i] = malloc(sizeof(path_t));
 		//initializing path variable inside the structure
-		array[i]->path = malloc(sizeof(char)*line_size);
+        paths->paths[i]->path = malloc(sizeof(char)*line_size);
 		//iterating over a line
 		for(j = 0; ; j++) {
 			//exceeding path buffer
 			if(j > line_size) {
 				//reallocate line size
 				line_size += 100;
-				realloc(array[i]->path, sizeof(char)*line_size);
+				realloc(paths->paths[i]->path, sizeof(char)*line_size);
 			}
 			//reading char by char
-			byte_read = fread(array[i]->path+j, 1, 1, conf_file);
+			byte_read = fread(paths->paths[i]->path+j, 1, 1, conf_file);
 			//recursive path
-			if(j == 0 && *(array[i]->path+j) == '+') {
+			if(j == 0 && *(paths->paths[i]->path+j) == '+') {
 				//print for debugging
-				array[i]->recusive = true;
+                paths->paths[i]->recusive = true;
 			}
 			//if new line
-			if(*(array[i]->path+j) == '\r') {
+			if(*(paths->paths[i]->path+j) == '\r') {
 				//substituting end of string to new line
-				array[i]->path[j] = '\0';
+                paths->paths[i]->path[j] = '\0';
 				//reading newline character
 				byte_read = fread(temp, 1, 1, conf_file);
 				//checking whether it's really newline char
@@ -103,7 +105,7 @@ path_t** read_lines(FILE* conf_file) {
 			}
 			if(byte_read == 0) {
 				//reached end of file
-				return array;
+				return paths;
 			}
 		}
 	}
@@ -112,6 +114,54 @@ path_t** read_lines(FILE* conf_file) {
 	printf("[FAIL]\n");
 	puts("Error while parsing configuration file ");
 	exit(-1);
+
+}
+
+//main function, updates monitoring loop
+void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
+	//variables
+
+    //bool for sockopt flag
+    BOOL value = TRUE;
+	//bytes read
+	int bytes, sender_size;
+	//socket
+	SOCKET sock;
+	//receiving buffer
+	char buffer[4096];
+	//client address info
+	struct sockaddr_in client, sender;
+
+	client.sin_addr.s_addr = INADDR_ANY;
+	client.sin_port = htons((unsigned int)9090);
+	client.sin_family = AF_INET;
+
+	sock = create_socket();
+
+    //setting sockopt to avoid error "Socket in use"
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)&value, sizeof(value));
+
+	//binding socket to 9090 port and server address
+	if(bind(sock,(struct sockaddr*) &client, sizeof(client)) != 0){
+		perror("");
+		exit(-1);
+	}
+
+    sender_size = sizeof(sender);
+
+	while(1) {
+		//receiving bytes and saving onto temporary struct sockaddr_in
+		bytes = recv(sock, buffer, 4090, 0);
+		printf("Bytes read: %d\n", bytes);
+		if(bytes == -1) {
+			printf("%d\n", WSAGetLastError());
+			exit(-1);
+		}
+		if(bytes > 0) {
+			buffer[4096] = '\0';
+			printf("%s\n", buffer);
+		}
+	}
 
 }
 

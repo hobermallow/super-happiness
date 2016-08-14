@@ -13,7 +13,6 @@
 #include <netinet/in.h>
 #include "../utils.h"
 
-int sock;
 
 /**
  * @return int corresponding to socket
