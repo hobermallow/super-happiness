@@ -8,6 +8,11 @@
 #ifndef CLIENT_UTILS_H_
 #define CLIENT_UTILS_H_
 
+#define MUTEX 1111
+#define CLIENTS 2222
+#define INTERLOCKED 3333
+#define READERS 4444
+
 #include <stdbool.h>
 
 //defining structure for path managing
