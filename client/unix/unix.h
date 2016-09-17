@@ -8,17 +8,21 @@
 #define DEBUG_CLIENT_UNIX_H_
 
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/socketvar.h>
 #include <sys/types.h>
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include <stropts.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <unistd.h>
 #include "../utils.h"
 
 
@@ -39,6 +43,37 @@ int create_socket() {
 	puts("[OK]");
 	//return value of socket fd
 	return s;
+}
+
+/**
+ * routine to wait for incoming clients
+ * and send them socket for listening
+ * on server updates
+ */
+void server_socket_passing_routine(thread_arg* threadArg) {
+    //thread local variables
+    //client address
+    struct sockaddr_un client_address;
+    //client address size
+    int size = sizeof(client_address);
+    //connected socket
+    int connected_socket;
+   //thread inherits all parent's variables
+    if(0 != listen(threadArg->unix_socket, 100)) {
+        perror("Error while imposing socket listening condition: ");
+        exit(-1);
+    }
+
+    //infinite loop to accept incoming clients
+    while(1) {
+        //accept a new client
+        if(0 > (connected_socket = accept(threadArg->unix_socket, (struct sockaddr *)&client_address, &size))) {
+            //error while accepting incoming connection
+            perror("Error while accepting incoming client connection: ");
+            exit(-1);
+        }
+        //send to listen on server update
+    }
 }
 
 //converting ip address to struct in_addr suitable format
@@ -118,15 +153,18 @@ conf_file_t* read_lines(FILE* conf_file) {
 void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	//variables
 
-    //barrier to synchronize processes
-    pthread_barrier_t* barrier;
-    pthread_barrierattr_t* barrierattr;
-	//value for setsockopt
+    //struct for thread arguments
+    thread_arg threadArg;
+    //pipe variable
+    int pipe;
+    //value for setsockopt
 	int value = 1;
 	//bytes read
 	int bytes, sender_size;
-	//socket
+	//socket for server communication
 	int sock;
+    //UNIX DOMAIN SOCKET
+    int unix_socket;
     //client identifier
     int client_id;
     //global variable monitoring number of active clients on a host
@@ -149,32 +187,23 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	char buffer[4096];
 	//client address info
 	struct sockaddr_in client, sender;
+    //unix domain socket address
+    struct sockaddr_un unix_socket_addr;
+
 
     //client address
 	client.sin_addr.s_addr = INADDR_ANY;
 	client.sin_port = htons((unsigned int)9090);
 	client.sin_family = AF_INET;
 
-    //creating socket
-	sock = create_socket();
+
 	//preventing error "Address already in use"
 //	if(-1 == setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value))) {
 //        perror("");
 //    }
 
-	if(-1 == setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value))) {
-        perror("");
-    }
 
-    printf("Socket fd: %d\n", sock);
 
-    printf("Binding socket address... ");
-	//binding socket to 9090 port and server address
-	if(bind(sock,(struct sockaddr*) &client, sizeof(client)) != 0){
-		perror("Binding error: ");
-		exit(-1);
-	}
-    puts("[OK]");
 
     //getting interlocked variable for Dekker's algorithm
     //getting file descriptor of shared memory location
@@ -252,6 +281,58 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         pthread_mutexattr_init(mutex_attr);
         pthread_mutexattr_setpshared(mutex_attr, PTHREAD_PROCESS_SHARED);
         pthread_mutex_init(mutex, mutex_attr);
+        //creating socket for server communication
+        sock = create_socket();
+        //avoiding "Address already in use" error
+        if(-1 == setsockopt(sock, SOL_SOCKET, SO_REUSEPORT, &value, sizeof(value))) {
+            perror("");
+        }
+
+        //initializing UNIX DOMAIN SOCKET to share previously created socket
+        if(0 > (unix_socket = socket(AF_UNIX, SOCK_STREAM, 0))) {
+            perror("Error creating unix domain socket: ");
+            (*interlocked) = 0;
+            (*active_clients) = 0;
+            exit(-1);
+        }
+
+        printf("Binding socket address... ");
+        //binding socket to 9090 port and server address
+        if(bind(sock,(struct sockaddr*) &client, sizeof(client)) != 0){
+            perror("Binding error: ");
+            exit(-1);
+        }
+        puts("[OK]");
+
+        //cleaning socket address variable
+        memset(&unix_socket_addr, 0, sizeof(unix_socket_addr));
+        //setting local address
+        unix_socket_addr.sun_family = AF_UNIX;
+        strncpy(unix_socket_addr.sun_path, UNIX_SOCKET, sizeof(unix_socket_addr.sun_path));
+
+        //unlinking path
+        unlink(UNIX_SOCKET);
+
+        if(-1 == bind(unix_socket, (struct sockaddr*) &unix_socket_addr, sizeof(unix_socket_addr))) {
+            perror("Error while binding unix domain socket: ");
+            exit(-1);
+        }
+
+        //thread variable
+        pthread_t socket_thread;
+        //assigning arguments to thread arguments structure
+        threadArg.socket = sock;
+        threadArg.unix_socket = unix_socket;
+        //start new thread
+        if(0 != pthread_create(&socket_thread, NULL, server_socket_passing_routine, &threadArg )) {
+            //error while creating new thread
+            perror("Error while creating thread to manage socket passing: ");
+            exit(-1);
+        }
+    }
+    //if this is not the first client
+    else {
+
     }
 
 
@@ -271,7 +352,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     //getting number of already active clients
     readers = shmat(readers_des, NULL, 0);
     //END OF EXCLUSIVE SECTION
-    *interlocked = 0;
+    (*interlocked) = 0;
 
 
 
