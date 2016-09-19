@@ -13,6 +13,8 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <time.h>
 
 
 struct directory{
@@ -30,7 +32,7 @@ struct file_info{
     char* path;
     long size;
     char* rights;
-    long timestamp;
+    double timestamp;
 };
 
 
@@ -138,8 +140,7 @@ long sizeDir(char* path)
 
         if( stat(name,&buf) < 0 )
         {
-            printf("Error: stat");
-            return -1;
+            return 0;
         };
 
         if( isDirectory(name) ) size+=sizeDir(name);
@@ -164,7 +165,7 @@ void setDirectory(Directory* dir, char* path)
 };
 
 
-Directory* initTree(char* path, Directory* root) {
+Directory* initTree(char* path, Directory* root, time_t t_server) {
 
 
     struct dirent *in_file;
@@ -207,26 +208,28 @@ Directory* initTree(char* path, Directory* root) {
         perm[2] = buf.st_mode & S_IWRITE ? 'w' : '-'; //w
 
 
-        FileInfo* fileInfo = (FileInfo*)malloc(sizeof(FileInfo));
-        fileInfo->path = (char*)calloc(length, sizeof(char));
-        fileInfo->path = strncpy(fileInfo->path, name, length);
-        fileInfo->size = buf.st_size;
-        fileInfo->rights = (char*)calloc(3, sizeof(char));
-        fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
-
-
-        addFile(root, fileInfo);
-
-
         if( S_ISDIR(buf.st_mode) && in_file->d_name[0] != '.')
         {
             Directory* d = (Directory*)malloc(sizeof(Directory)*1);
 
             addSubDir(root,d);
 
-            initTree(name,d);
+            initTree(name,d, t_server);
         }
+        else
+        {
+            FileInfo* fileInfo = (FileInfo*)malloc(sizeof(FileInfo));
+            fileInfo->path = (char*)calloc(length, sizeof(char));
+            fileInfo->path = strncpy(fileInfo->path, name, length);
+            fileInfo->size = buf.st_size;
+            fileInfo->rights = (char*)calloc(3, sizeof(char));
+            fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
+            fileInfo->timestamp = difftime(time(0), t_server);
 
+            addFile(root, fileInfo);
+        }
+        
+        free(perm);
         free(name);
     }
 
@@ -260,7 +263,8 @@ void visit(Directory* root, int lvl)
         {
             printf("   ");
         }
-        printf("file=%s - size=%ld - rights=%s\n", root->files[f]->path, root->files[f]->size, root->files[f]->rights);
+        printf("file=%s - size=%ld - rights=%s -time=%f\n", root->files[f]->path, root->files[f]->size,
+               root->files[f]->rights, root->files[f]->timestamp);
     }
 
     int i;

@@ -18,7 +18,8 @@ int main(int argc, char** argv)
     //test init tree
     TreeDir* tree = (TreeDir*)malloc(sizeof(TreeDir));
     Directory* root = (Directory*)malloc(sizeof(Directory)*1);
-    Directory* r = initTree(argv[1],root);
+    time_t current_time = time(NULL);
+    Directory* r = initTree(argv[1],root, current_time);
 
     //test visit tree
     visit(r,0);
