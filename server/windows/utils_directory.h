@@ -195,8 +195,8 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
 
         struct stat buf;
 
-        if (stat(name, &buf) < 0) {
-            perror("Error: stat");
+        if (lstat(name, &buf) < 0) {
+            perror("Error: lstat\n");
             return NULL;
         };
 
@@ -217,18 +217,20 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
 
             root->size+=d->size;
         }
+        else
+        {
 
-            FileInfo* fileInfo = (FileInfo*)malloc(sizeof(FileInfo));
-            fileInfo->path = (char*)calloc(length, sizeof(char));
+            FileInfo *fileInfo = (FileInfo *) malloc(sizeof(FileInfo));
+            fileInfo->path = (char *) calloc(length, sizeof(char));
             fileInfo->path = strncpy(fileInfo->path, name, length);
             fileInfo->size = buf.st_size;
-            fileInfo->rights = (char*)calloc(3, sizeof(char));
+            fileInfo->rights = (char *) calloc(3, sizeof(char));
             fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
             fileInfo->timestamp = difftime(time(0), t_server);
 
-            root->size+=fileInfo->size;
+            root->size += fileInfo->size;
             addFile(root, fileInfo);
-
+        }
 
         free(perm);
         free(name);
