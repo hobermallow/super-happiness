@@ -21,7 +21,7 @@ int main(int argc, char** argv)
     Directory* r = initTree(argv[1],root);
 
     //test visit tree
-    visit(r);
+    visit(r,0);
 
 
 	exit(0);
