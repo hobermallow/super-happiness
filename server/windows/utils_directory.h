@@ -256,7 +256,7 @@ void visit(Directory* root, int lvl)
         printf("_");
     }
 
-    printf("Dir=%s, sz=%ld, n_subDir=%d\n", root->path, root->size, root->num_subdir);
+    printf("Dir=%s, sz=%ld, n_subDir=%d, n_files=%d\n", root->path, root->size, root->num_subdir, root->num_files);
 
     int f;
     for(f=0; f<root->num_files; f++)
