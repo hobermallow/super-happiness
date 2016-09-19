@@ -13,13 +13,13 @@ int main(int argc, char** argv)
 	printf("Is a Directory ? %s\n", isDirectory(path) ? "true" : "false");
 
 	//test size directory
-	printf("The size is : %ld bytes\n", sizeDir(path));
+//	printf("The size is : %ld bytes\n", sizeDir(path));
 
     //test init tree
     TreeDir* tree = (TreeDir*)malloc(sizeof(TreeDir));
     Directory* root = (Directory*)malloc(sizeof(Directory)*1);
     time_t current_time = time(NULL);
-    Directory* r = initTree(argv[1],root, current_time);
+    Directory* r = initTree(path, root, current_time);
 
     //test visit tree
     visit(r,0);

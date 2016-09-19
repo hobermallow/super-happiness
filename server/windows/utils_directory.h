@@ -46,8 +46,6 @@ typedef struct file_info FileInfo;
 typedef struct tree_directory TreeDir;
 
 
-bool setFileInfo(char* path, long size, char* rights, long timestamp);
-
 bool setRoot(TreeDir* tree, Directory* dir)
 {
     if(tree == NULL || dir == NULL) return false;
@@ -157,7 +155,7 @@ void setDirectory(Directory* dir, char* path)
 {
     dir->path= (char*)calloc((strlen(path)) ,  sizeof(char));
     dir->path = strncpy(dir->path , path, strlen(path));
-    dir->size = sizeDir(path);
+    dir->size = 0;
     dir->subDir = NULL;
     dir->files = NULL;
     dir->num_files=0;
@@ -178,6 +176,7 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
     }
 
     setDirectory(root,path);
+
     while (in_file = readdir(fd)) {
 
         if (!strcmp(in_file->d_name, "."))
@@ -214,10 +213,11 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
 
             addSubDir(root,d);
 
-            initTree(name,d, t_server);
+            initTree(name, d, t_server);
+
+            root->size+=d->size;
         }
-        else
-        {
+
             FileInfo* fileInfo = (FileInfo*)malloc(sizeof(FileInfo));
             fileInfo->path = (char*)calloc(length, sizeof(char));
             fileInfo->path = strncpy(fileInfo->path, name, length);
@@ -226,9 +226,10 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
             fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
             fileInfo->timestamp = difftime(time(0), t_server);
 
+            root->size+=fileInfo->size;
             addFile(root, fileInfo);
-        }
-        
+
+
         free(perm);
         free(name);
     }
