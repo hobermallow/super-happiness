@@ -1,7 +1,3 @@
-//
-// Created by aPolo on 18/09/2016.
-//
-
 #ifndef SUPER_HAPPINESS_MASTER_UTILS_DIRECTORY_H
 #define SUPER_HAPPINESS_MASTER_UTILS_DIRECTORY_H
 
@@ -44,6 +40,38 @@ struct tree_directory{
 typedef struct directory Directory;
 typedef struct file_info FileInfo;
 typedef struct tree_directory TreeDir;
+
+
+void freeFileInfo(FileInfo* fileInfo)
+{
+    free(fileInfo->path);
+    free(fileInfo->rights);
+    free(fileInfo);
+}
+
+void freeDirectory(Directory* dir)
+{
+    free(dir->path);
+
+    int i;
+    for(i=0; i<dir->num_files; i++)
+    {
+        free(dir->files[i]);
+    }
+
+    free(dir->files);
+
+    for(i=0; i<dir->num_subdir; i++)
+    {
+        freeDirectory(dir->subDir[i]);
+
+        free(dir->subDir[i]);
+    }
+
+    if(dir->subDir != NULL) free(dir->subDir);
+    free(dir);
+
+}
 
 
 bool setRoot(TreeDir* tree, Directory* dir)

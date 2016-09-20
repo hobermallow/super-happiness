@@ -13,7 +13,7 @@ int main(int argc, char** argv)
 
     if ( ! check_arguments(argc, argv[1], argv[2] ) ) exit(0);
 
-    
+
 
     char* path_init = argv[1]; //init directory
     int sock_fd, clilen, newsock_fd, port = atoi(argv[2]);
@@ -29,7 +29,6 @@ int main(int argc, char** argv)
     }
 
     bzero((char *) &serv_addr, sizeof(serv_addr));
-    port = 8080;
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
@@ -40,7 +39,6 @@ int main(int argc, char** argv)
         perror("ERROR on binding");
         exit(1);
     }
-
 
     if (listen(sock_fd,5) < 0)
     {
