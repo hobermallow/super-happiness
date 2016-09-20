@@ -25,6 +25,28 @@ struct lst_updates{
 typedef struct update Update;
 typedef struct lst_updates ListUpdates;
 
+
+
+void freeUpdate(Update* up)
+{
+    free(up->path);
+    free(up->alteration);
+    free(up);
+}
+
+
+void freeListUpdates(ListUpdates* lst)
+{
+    int i;
+    for(i=0; i<lst->num_update; i++)
+    {
+        freeUpdate(lst->list[i]);
+    }
+    free(lst->list);
+    free(lst);
+}
+
+
 Update* createUpdate(char* path, long size, char* perm, double time, char* alteration, bool isDirectory)
 {
     if( path==NULL || size==-1 || perm==NULL || alteration==NULL ) return NULL;
@@ -45,6 +67,7 @@ Update* createUpdate(char* path, long size, char* perm, double time, char* alter
 
     return update;
 }
+
 
 bool addUpdate(ListUpdates* lst, Update* up)
 {

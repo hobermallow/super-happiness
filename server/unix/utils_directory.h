@@ -56,7 +56,7 @@ void freeDirectory(Directory* dir)
     int i;
     for(i=0; i<dir->num_files; i++)
     {
-        free(dir->files[i]);
+        freeFileInfo(dir->files[i]);
     }
 
     free(dir->files);
