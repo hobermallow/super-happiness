@@ -10,14 +10,12 @@
 
 int main(int argc, char** argv)
 {
-    if ( --argc!=2 || argv[1] == NULL || argv[2] == NULL)
-    {
-        puts("Wrong number of arguments");
-        puts("Usage: super-happiness-server  path  port");
-        exit(1);
-    }
 
-    char* path = argv[1]; //init directory
+    if ( ! check_arguments(argc, argv[1], argv[2] ) ) exit(0);
+
+    
+
+    char* path_init = argv[1]; //init directory
     int sock_fd, clilen, newsock_fd, port = atoi(argv[2]);
     struct sockaddr_in serv_addr, cli_addr;
     char str[INET_ADDRSTRLEN]; //IP client
@@ -67,7 +65,7 @@ int main(int argc, char** argv)
         exit(1);
     };
 
-    isValid(buff, path);
+    check_command_path(buff, path_init);
 
 
     close(newsock_fd);
