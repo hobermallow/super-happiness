@@ -190,6 +190,21 @@ void setDirectory(Directory* dir, char* path)
     dir->num_subdir=0;
 };
 
+FileInfo* setFileInfo(char* path, struct stat buf, char* perm, time_t t_server )
+{
+    FileInfo *fileInfo = (FileInfo *) malloc(sizeof(FileInfo));
+    if( fileInfo==NULL || perm == NULL || t_server == 0) return NULL;
+
+    fileInfo->path = (char *) calloc(strlen(path), sizeof(char));
+    fileInfo->path = strncpy(fileInfo->path, path, strlen(path));
+    fileInfo->size = buf.st_size;
+    fileInfo->rights = (char *) calloc(3, sizeof(char));
+    fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
+    fileInfo->timestamp = difftime(time(0), t_server);
+
+    return fileInfo;
+}
+
 
 Directory* initTree(char* path, Directory* root, time_t t_server) {
 
@@ -248,13 +263,7 @@ Directory* initTree(char* path, Directory* root, time_t t_server) {
         else
         {
 
-            FileInfo *fileInfo = (FileInfo *) malloc(sizeof(FileInfo));
-            fileInfo->path = (char *) calloc(length, sizeof(char));
-            fileInfo->path = strncpy(fileInfo->path, name, length);
-            fileInfo->size = buf.st_size;
-            fileInfo->rights = (char *) calloc(3, sizeof(char));
-            fileInfo->rights = strncpy(fileInfo->rights, perm, 3);
-            fileInfo->timestamp = difftime(time(0), t_server);
+            FileInfo* fileInfo = setFileInfo(name,buf,perm,t_server);
 
             root->size += fileInfo->size;
             addFile(root, fileInfo);
