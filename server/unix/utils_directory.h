@@ -278,6 +278,23 @@ void visit(Directory* root, int lvl)
 }
 
 
+Directory* searchDirectory(Directory* root, char* directory)
+{
+    if(root == NULL || directory == NULL) return NULL;
+    else if( strcmp(root->path,directory)) return root;
+    else
+    {
+        int i;
+        for( i=0; i<root->num_subdir; i++)
+        {
+            if( strlen(root->subDir[i] < strlen(directory))) searchDirectory(root->subDir[i], directory);
+        }
+    }
+    return NULL;
+}
+
+
+
 
 
 
