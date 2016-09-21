@@ -41,7 +41,7 @@ unsigned long size_dir(char *path)
       
       strncpy(name, path, strlen(path));
       strncat(name, "\\", 1);
-      strncat(name, in_file->d_name, strlen(in_file->d_name));      
+      strncat(name, in_file->d_name, strlen(in_file->d_name));
 
       if( stat(name,&buf) < 0 )
 	{
@@ -93,14 +93,15 @@ int scan_path(char *path, int flag, time_t tserver)
       memset(name, '\0', length);
       
       strncpy(name, path, strlen(path));
-      strncat(name, "\\", 1);
+      strncat(name, "/", 1);
       strncat(name, in_file->d_name, strlen(in_file->d_name));
 
       
       struct stat buf;
       int f=1;
+        printf("%s\n", name);
 
-      if( stat(name,&buf) < 0 )
+        if( stat(name,&buf) < 0 )
 	{
 	  perror("Error: stat");
 	  return -1;
@@ -140,5 +141,5 @@ int main()
   time_t current_time = time(NULL); //tempo di avvio del server
 
   
-  return scan_path("DIR",1,current_time);
+  return scan_path("/home/mishima/Documents/Syrus/",1,current_time);
 }
