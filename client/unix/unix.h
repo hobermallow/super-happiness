@@ -46,6 +46,10 @@ int create_socket() {
 }
 
 /**
+ * function to send a fd over a unix domain socket
+ */
+
+/**
  * routine to wait for incoming clients
  * and send them socket for listening
  * on server updates
@@ -58,7 +62,29 @@ void server_socket_passing_routine(thread_arg* threadArg) {
     int size = sizeof(client_address);
     //connected socket
     int connected_socket;
-   //thread inherits all parent's variables
+    //message header
+    struct msghdr msg = { 0 };
+    //initializing sending buffer
+    char buf[CMSG_SPACE(sizeof(threadArg->socket))];
+
+    //clean buffer
+    memset(buf, '\0', sizeof(buf));
+    //
+    struct iovec io = { .iov_base = "ABC", .iov_len = 3 };
+    msg.msg_iov = &io;
+    msg.msg_iovlen = 1;
+    msg.msg_control = buf;
+    msg.msg_controllen = sizeof(buf);
+
+    struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(threadArg->socket));
+
+    *((int *) CMSG_DATA(cmsg)) = threadArg->socket;
+
+    msg.msg_controllen = cmsg->cmsg_len;
+
     if(0 != listen(threadArg->unix_socket, 100)) {
         perror("Error while imposing socket listening condition: ");
         exit(-1);
@@ -73,6 +99,10 @@ void server_socket_passing_routine(thread_arg* threadArg) {
             exit(-1);
         }
         //send to listen on server update
+        if (sendmsg(threadArg->unix_socket, &msg, 0) < 0) {
+            perror("Failed to send message\n");
+            exit(-1);
+        }
     }
 }
 
@@ -197,10 +227,6 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	client.sin_family = AF_INET;
 
 
-	//preventing error "Address already in use"
-//	if(-1 == setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value))) {
-//        perror("");
-//    }
 
 
 
@@ -332,7 +358,55 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     }
     //if this is not the first client
     else {
+        //listen to unix domain socket in order to obtain net socket
 
+        //initializing UNIX DOMAIN SOCKET to get net socket
+        if(0 > (unix_socket = socket(AF_UNIX, SOCK_STREAM, 0))) {
+            perror("Error creating unix domain socket: ");
+            (*interlocked) = 0;
+            (*active_clients) = 0;
+            exit(-1);
+        }
+
+        //cleaning socket address variable
+        memset(&unix_socket_addr, 0, sizeof(unix_socket_addr));
+        //setting local address
+        unix_socket_addr.sun_family = AF_UNIX;
+        strncpy(unix_socket_addr.sun_path, UNIX_SOCKET, sizeof(unix_socket_addr.sun_path));
+
+        //unlinking path
+        unlink(UNIX_SOCKET);
+
+        //connect to unix domain socket
+        if(connect(unix_socket, (struct sockaddr*)(&unix_socket_addr), sizeof(unix_socket)) < 0 ) {
+            perror("Error while connecting to unix domain socket: ");
+            (*interlocked) = 0;
+            (*active_clients) = 0;
+            exit(-1);
+        }
+
+        struct msghdr msg = {0};
+
+        char m_buffer[256];
+        struct iovec io = { .iov_base = m_buffer, .iov_len = sizeof(m_buffer) };
+        msg.msg_iov = &io;
+        msg.msg_iovlen = 1;
+
+        char c_buffer[256];
+        msg.msg_control = c_buffer;
+        msg.msg_controllen = sizeof(c_buffer);
+
+        if (recvmsg(unix_socket, &msg, 0) < 0) {
+            perror("Failed to receive message\n");
+        }
+
+        struct cmsghdr * cmsg = CMSG_FIRSTHDR(&msg);
+
+        unsigned char * data = CMSG_DATA(cmsg);
+
+        printf("About to extract fd\n");
+        sock = *((int*) data);
+        printf("Extracted fd %d\n", sock);
     }
 
 
