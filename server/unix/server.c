@@ -1,6 +1,6 @@
 #include <sys/types.h>
-#include "utils_directory.h"
-
+#include "utils_directory.c"
+/*
 int main(int argc, char** argv)
 {
 	char* path = (char*)malloc(sizeof(argv[1]));
@@ -26,4 +26,4 @@ int main(int argc, char** argv)
 
 
 	exit(0);
-}
+}*/

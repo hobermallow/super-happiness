@@ -1,11 +1,9 @@
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 
 #ifndef SUPER_HAPPINESS_MASTER_MANAGER_UPDATES_H
 #define SUPER_HAPPINESS_MASTER_MANAGER_UPDATES_H
-
 #endif //SUPER_HAPPINESS_MASTER_MANAGER_UPDATES_H
+
+#include "utils_directory.h"
 
 
 struct update{
@@ -25,55 +23,10 @@ struct lst_updates{
 typedef struct update Update;
 typedef struct lst_updates ListUpdates;
 
+void freeUpdate(Update*);
+void freeListUpdates(ListUpdates*);
+Update* createUpdate(char*, long, char*, double, char*, bool);
+bool addUpdate(ListUpdates*, Update*);
+void* check_creation( void*);
+int check_update(Directory*);
 
-
-void freeUpdate(Update* up)
-{
-    free(up->path);
-    free(up->alteration);
-    free(up);
-}
-
-
-void freeListUpdates(ListUpdates* lst)
-{
-    int i;
-    for(i=0; i<lst->num_update; i++)
-    {
-        freeUpdate(lst->list[i]);
-    }
-    free(lst->list);
-    free(lst);
-}
-
-
-Update* createUpdate(char* path, long size, char* perm, double time, char* alteration, bool isDirectory)
-{
-    if( path==NULL || size==-1 || perm==NULL || alteration==NULL ) return NULL;
-
-    Update* update = (Update*)malloc(sizeof(Update));
-
-    update->path = (char*)malloc(strlen(path) * sizeof(char));
-    update->path = strncpy(update->path, path, strlen(path));
-
-    update->size = size;
-
-    update->alteration = (char*)malloc(strlen(alteration) * sizeof(char));
-    update->path = strncpy(update->alteration, alteration, strlen(alteration));
-
-    update->isDirectory = isDirectory;
-    update->perm[1] = perm[1]; update->perm[2] = perm[2]; update->perm[3] = perm[3];
-    update->time = time;
-
-    return update;
-}
-
-
-bool addUpdate(ListUpdates* lst, Update* up)
-{
-    lst->list = (Update**)realloc(lst->list, lst->num_update * sizeof(Update*));
-    if(lst->list == NULL) return false;
-
-    lst->list[lst->num_update] = up;
-    return true;
-}
