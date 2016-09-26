@@ -12,6 +12,8 @@
 #define INTERLOCKED 3333
 #define READERS 4444
 #define UNIX_SOCKET "/tmp/unixdomainsocket"
+#define MSG_QUEUE "/tmp/messagequeue"
+#define COND_VARIABLE 5555
 
 #include <stdbool.h>
 

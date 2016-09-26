@@ -7,6 +7,7 @@
 #ifndef DEBUG_CLIENT_UNIX_H_
 #define DEBUG_CLIENT_UNIX_H_
 
+#include <mqueue.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/socketvar.h>
@@ -24,6 +25,43 @@
 #include <stdatomic.h>
 #include <unistd.h>
 #include "../utils.h"
+
+
+/**
+ *
+ * @param src source buffer
+ * @param src_end_index index of last element in src
+ * @param dst destination buffer
+ * @param dst_end_index index of last element in dst
+ **/
+
+void read_info(char* src, int* src_end_index,char* dst, int* dst_end_index) {
+    //copying from src to dst
+    bcopy(src, &dst[(*dst_end_index)], (*src_end_index));
+    (*dst_end_index) += (*src_end_index);
+    int index = 0;
+    char ch;
+    while (index < (*dst_end_index)) {
+        //reading character
+        ch = src[index];
+//        printf("%c", ch);
+        //if reaching newline
+        if(ch == '\n') {
+            //printing info
+            fwrite(dst, (*dst_end_index), 1, stdout);
+            //copying end of dst at its beginning
+            memcpy(dst, dst[index+1], (*dst_end_index)-(index+1));
+            //setting new dst_end_index
+            (*dst_end_index) = (*dst_end_index)-(index+1);
+            //resetting reading index
+            index = 0;
+            continue;
+        }
+        index++;
+    }
+    return;
+
+}
 
 
 /**
@@ -54,7 +92,8 @@ int create_socket() {
  * and send them socket for listening
  * on server updates
  */
-void server_socket_passing_routine(thread_arg* threadArg) {
+void* server_socket_passing_routine(thread_arg* threadArg) {
+    printf("%d %d\n", threadArg->unix_socket, threadArg->socket);
     //thread local variables
     //client address
     struct sockaddr_un client_address;
@@ -80,10 +119,11 @@ void server_socket_passing_routine(thread_arg* threadArg) {
     cmsg->cmsg_level = SOL_SOCKET;
     cmsg->cmsg_type = SCM_RIGHTS;
     cmsg->cmsg_len = CMSG_LEN(sizeof(threadArg->socket));
+    printf("%d\n", CMSG_LEN(sizeof(threadArg->socket)));
 
     *((int *) CMSG_DATA(cmsg)) = threadArg->socket;
 
-    msg.msg_controllen = cmsg->cmsg_len;
+//    msg.msg_controllen = cmsg->cmsg_len;
 
     if(0 != listen(threadArg->unix_socket, 100)) {
         perror("Error while imposing socket listening condition: ");
@@ -98,8 +138,8 @@ void server_socket_passing_routine(thread_arg* threadArg) {
             perror("Error while accepting incoming client connection: ");
             exit(-1);
         }
-        //send to listen on server update
-        if (sendmsg(threadArg->unix_socket, &msg, 0) < 0) {
+        //send socket  to listen on server update
+        if (sendmsg(connected_socket, &msg, 0) < 0) {
             perror("Failed to send message\n");
             exit(-1);
         }
@@ -183,10 +223,22 @@ conf_file_t* read_lines(FILE* conf_file) {
 void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	//variables
 
+    //condition variables
+    pthread_cond_t* count_threshold_cv;
+    //condition variable file des
+    int count_threshold_cv_des;
+    //message queue
+    mqd_t msg_queue;
+    //message queue attribute
+    struct mq_attr attr;
+    //buffer for messages
+    char msg_buff[4098] = "ciao";
+    //info buffer last char index
+    int index = 0;
+    //info buffer
+    char* info;
     //struct for thread arguments
     thread_arg threadArg;
-    //pipe variable
-    int pipe;
     //value for setsockopt
 	int value = 1;
 	//bytes read
@@ -200,15 +252,12 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     //global variable monitoring number of active clients on a host
     int* active_clients;
     int active_clients_des;
-    key_t active_clients_key;
     //global variable monitoring number of clients who read a certain section of incoming data
     int* readers;
     int readers_des;
-    key_t readers_key;
     //global vairable for first synchronization of the processes
     int interlocked_des;
     int* interlocked;
-    key_t interlocked_key;
     //mutex variables
     int mutex_des;
     pthread_mutex_t* mutex;
@@ -228,6 +277,8 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 
 
 
+    //allocating info buffer
+    info = malloc(sizeof(char)*4096);
 
 
 
@@ -299,8 +350,44 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 
     puts("[OK]");
 
+    //initializing condition variables
+    //initializing global variables for monitoring number of readers
+    count_threshold_cv_des = shmget(COND_VARIABLE, sizeof(pthread_cond_t), IPC_EXCL | IPC_CREAT | O_RDWR | S_IRWXG | S_IRWXU | S_IRWXO);
+
+    if(count_threshold_cv_des < 0) {
+        count_threshold_cv_des = shmget(COND_VARIABLE, sizeof(pthread_cond_t), O_RDWR);
+        if(count_threshold_cv_des < 0) {
+            perror("Error while getting condition variable shared variable ");
+            exit(-1);
+        }
+
+    }
+
+    //getting condition variable
+    count_threshold_cv = shmat(count_threshold_cv_des, NULL, 0);
+
+
     //mutex initializing SHOULD HAPPEN ONLY ONCE
     if(client_id == 1) {
+
+        //initializing condition variables
+        if(pthread_cond_init(count_threshold_cv, NULL) != 0) {
+            perror("Error while initializing condition variables: ")
+        }
+
+
+        //initializing message queue
+        puts("Initializing message queue, only first activated client");
+        msg_queue = mq_open(MSG_QUEUE, O_CREAT || O_RDWR );
+        if(msg_queue == -1) {
+            perror("Error while creating message queue: ");
+            exit(-1);
+        }
+        //getting queue attributes
+        if(mq_getattr(msg_queue, &attr) == -1) {
+            perror("Error while opening msg_queue attribute");
+            exit(-1);
+        }
         //only the first client should initialize the mutex
         puts("Initializing mutex, only first activated client");
         mutex_attr = malloc(sizeof(pthread_mutexattr_t));
@@ -358,6 +445,24 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     }
     //if this is not the first client
     else {
+
+
+        //opening message queue
+        msg_queue = mq_open(MSG_QUEUE, O_RDWR );
+        if(msg_queue == -1) {
+            perror("Error while opening message queue: ");
+            exit(-1);
+        }
+        //getting queue attributes
+        if(mq_getattr(msg_queue, &attr) == -1) {
+            perror("Error while opening msg_queue attribute");
+            exit(-1);
+        }
+        //reading messages
+        if(mq_receive(msg_queue,msg_buff, attr.mq_msgsize, NULL) == -1) {
+            perror("Error while getting message: ");
+            exit(-1);
+        }
         //listen to unix domain socket in order to obtain net socket
 
         //initializing UNIX DOMAIN SOCKET to get net socket
@@ -375,10 +480,10 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         strncpy(unix_socket_addr.sun_path, UNIX_SOCKET, sizeof(unix_socket_addr.sun_path));
 
         //unlinking path
-        unlink(UNIX_SOCKET);
+//        unlink(UNIX_SOCKET);
 
         //connect to unix domain socket
-        if(connect(unix_socket, (struct sockaddr*)(&unix_socket_addr), sizeof(unix_socket)) < 0 ) {
+        if(connect(unix_socket, (struct sockaddr*)(&unix_socket_addr), sizeof(unix_socket_addr)) < 0 ) {
             perror("Error while connecting to unix domain socket: ");
             (*interlocked) = 0;
             (*active_clients) = 0;
@@ -407,6 +512,12 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         printf("About to extract fd\n");
         sock = *((int*) data);
         printf("Extracted fd %d\n", sock);
+
+        //sending a message
+        if(mq_send(msg_queue, msg_buff, 1, 0) == -1) {
+            perror("Error while sending message: ");
+            exit(-1);
+        }
     }
 
 
@@ -433,8 +544,6 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     sender_size = sizeof(sender);
 
 	while(1) {
-        //mutexing on readers
-        pthread_mutex_lock(mutex);
         //mutexing on active clients
         while(__sync_lock_test_and_set(interlocked, 1) == 1) {
             //loooooooooooooooooooop
@@ -449,28 +558,54 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
             puts("Waiting for data");
             bytes = recvfrom(sock, buffer, 4096, 0, (struct sockaddr*)&sender, &sender_size);
             (*interlocked) = 0;
-            pthread_mutex_unlock(mutex);
+            //sending a message
+            if(mq_send(msg_queue, msg_buff, 1, 0) == -1) {
+                perror("Error while sending message: ");
+                exit(-1);
+            }
+            //receiving message, HOPE
+            if(mq_receive(msg_queue,msg_buff, attr.mq_msgsize, NULL) == -1) {
+                perror("Error while getting message: ");
+                exit(-1);
+            }
+
+            printf("Bytes read: %d\n", bytes);
+            if(bytes == -1) {
+                perror("");
+                exit(-1);
+            }
+            if(bytes > 0) {
+                read_info(buffer, &bytes, info, &index);
+//			buffer[4096] = '\0';
+//			printf("%s\n", buffer);
+            }
+            //barrier
+            pthread_cond_broadcast(count_threshold_cv);
         }
         else {
             puts("Waiting for data");
             //peeking on socket
             bytes = recvfrom(sock, buffer, 4096, MSG_PEEK, (struct sockaddr*)&sender, &sender_size);
             (*interlocked) = 0;
-            pthread_mutex_unlock(mutex);
+            printf("Bytes read: %d\n", bytes);
+            if(bytes == -1) {
+                perror("");
+                exit(-1);
+            }
+            if(bytes > 0) {
+                read_info(buffer, &bytes, info, &index);
+//			buffer[4096] = '\0';
+//			printf("%s\n", buffer);
+            }
+
+            pthread_cond_wait(count_threshold_cv, mutex);
         }
 
-		printf("Bytes read: %d\n", bytes);
-		if(bytes == -1) {
-			perror("");
-			exit(-1);
-		}
-		if(bytes > 0) {
-			buffer[4096] = '\0';
-			printf("%s\n", buffer);
-		}
+
 
 	}
 
 }
+
 
 #endif /* DEBUG_CLIENT_UNIX_H_ */
