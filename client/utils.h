@@ -8,11 +8,12 @@
 #ifndef CLIENT_UTILS_H_
 #define CLIENT_UTILS_H_
 #define MUTEX 1111
+#define READ_MUTEX 6666
 #define CLIENTS 2222
 #define INTERLOCKED 3333
 #define READERS 4444
 #define UNIX_SOCKET "/tmp/unixdomainsocket"
-#define MSG_QUEUE "/tmp/messagequeue"
+#define MSG_QUEUE "messagequeue"
 #define COND_VARIABLE 5555
 
 #include <stdbool.h>

@@ -25,6 +25,7 @@
 #include <stdatomic.h>
 #include <unistd.h>
 #include "../utils.h"
+#include <errno.h>
 
 
 /**
@@ -223,10 +224,7 @@ conf_file_t* read_lines(FILE* conf_file) {
 void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 	//variables
 
-    //condition variables
-    pthread_cond_t* count_threshold_cv;
-    //condition variable file des
-    int count_threshold_cv_des;
+
     //message queue
     mqd_t msg_queue;
     //message queue attribute
@@ -258,7 +256,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     //global vairable for first synchronization of the processes
     int interlocked_des;
     int* interlocked;
-    //mutex variables
+    //mutexes variables
     int mutex_des;
     pthread_mutex_t* mutex;
     pthread_mutexattr_t* mutex_attr;
@@ -302,11 +300,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         perror("Error shmat: ");
     }
 
-    //BEGINNING EXCLUSIVE SECTION
-    //exclusive section for mutex initializing and client identifying
-    while(__sync_lock_test_and_set(interlocked, 1) == 1) {
-        //loooooooooooooooooooop
-    }
+
     printf("Getting clients number... ");
 
     //getting shared variables indicating number of clients running on the system
@@ -325,8 +319,31 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     //getting number of already active clients
     active_clients = shmat(active_clients_des, NULL, 0);
 
+    //initializing global variables for monitoring number of readers
+    readers_des = shmget(READERS, sizeof(int), IPC_EXCL | IPC_CREAT | O_RDWR | S_IRWXG | S_IRWXU | S_IRWXO);
+
+    if(readers_des < 0) {
+        readers_des = shmget(READERS, sizeof(int), O_RDWR);
+        if(readers_des < 0) {
+            perror("Error while getting readers shared variable ");
+            exit(-1);
+        }
+
+    }
+
+    //getting number of already active clients
+    readers = shmat(readers_des, NULL, 0);
+
+
+    //BEGINNING EXCLUSIVE SECTION
+    //exclusive section for mutex initializing and client identifying
+    while(__sync_lock_test_and_set(interlocked, 1) == 1) {
+        //loooooooooooooooooooop
+    }
+
     //client identifier
     client_id = ++(*active_clients);
+
 
     puts("[OK]");
     //as result of truncating , if this is the first client, active_clients variables should be equal to 0
@@ -336,7 +353,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
     //opening mutex in shared memory
     mutex_des = shmget(MUTEX, sizeof(pthread_mutex_t), IPC_EXCL | IPC_CREAT | O_RDWR | S_IRWXG | S_IRWXU | S_IRWXO);
 
-    //failing due to already intialized memory
+    //failing due to already created memory
     if(mutex_des < 0) {
         mutex_des = shmget(MUTEX, sizeof(pthread_mutex_t), O_RDWR);
         if(mutex_des < 0) {
@@ -350,39 +367,31 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 
     puts("[OK]");
 
-    //initializing condition variables
-    //initializing global variables for monitoring number of readers
-    count_threshold_cv_des = shmget(COND_VARIABLE, sizeof(pthread_cond_t), IPC_EXCL | IPC_CREAT | O_RDWR | S_IRWXG | S_IRWXU | S_IRWXO);
 
-    if(count_threshold_cv_des < 0) {
-        count_threshold_cv_des = shmget(COND_VARIABLE, sizeof(pthread_cond_t), O_RDWR);
-        if(count_threshold_cv_des < 0) {
-            perror("Error while getting condition variable shared variable ");
-            exit(-1);
-        }
-
-    }
-
-    //getting condition variable
-    count_threshold_cv = shmat(count_threshold_cv_des, NULL, 0);
 
 
     //mutex initializing SHOULD HAPPEN ONLY ONCE
     if(client_id == 1) {
 
-        //initializing condition variables
-        if(pthread_cond_init(count_threshold_cv, NULL) != 0) {
-            perror("Error while initializing condition variables: ")
-        }
 
-
+        //initializing message queue attr
+        attr.mq_flags = 0;
+        attr.mq_maxmsg = 10;
+        attr.mq_msgsize = 4098;
+        attr.mq_curmsgs = 0;
         //initializing message queue
+//        mode_t omask;
+//        omask = umask(0);
         puts("Initializing message queue, only first activated client");
-        msg_queue = mq_open(MSG_QUEUE, O_CREAT || O_RDWR );
+        msg_queue = mq_open("/ciao", (O_CREAT | O_RDWR), (S_IRWXU | S_IRWXG | S_IRWXO), &attr);
         if(msg_queue == -1) {
             perror("Error while creating message queue: ");
+            printf("%d error\n", errno);
+            (*interlocked) = 0;
+            (*active_clients) = 0;
             exit(-1);
         }
+//        umask(omask);
         //getting queue attributes
         if(mq_getattr(msg_queue, &attr) == -1) {
             perror("Error while opening msg_queue attribute");
@@ -394,6 +403,11 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         pthread_mutexattr_init(mutex_attr);
         pthread_mutexattr_setpshared(mutex_attr, PTHREAD_PROCESS_SHARED);
         pthread_mutex_init(mutex, mutex_attr);
+
+
+        //END OF EXCLUSIVE SECTION
+        (*interlocked) = 0;
+
         //creating socket for server communication
         sock = create_socket();
         //avoiding "Address already in use" error
@@ -448,7 +462,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
 
 
         //opening message queue
-        msg_queue = mq_open(MSG_QUEUE, O_RDWR );
+        msg_queue = mq_open("/ciao", O_RDWR );
         if(msg_queue == -1) {
             perror("Error while opening message queue: ");
             exit(-1);
@@ -458,11 +472,11 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
             perror("Error while opening msg_queue attribute");
             exit(-1);
         }
-        //reading messages
-        if(mq_receive(msg_queue,msg_buff, attr.mq_msgsize, NULL) == -1) {
-            perror("Error while getting message: ");
-            exit(-1);
-        }
+
+        //END OF EXCLUSISE SECTION
+        (*interlocked) = 0;
+
+
         //listen to unix domain socket in order to obtain net socket
 
         //initializing UNIX DOMAIN SOCKET to get net socket
@@ -513,31 +527,10 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         sock = *((int*) data);
         printf("Extracted fd %d\n", sock);
 
-        //sending a message
-        if(mq_send(msg_queue, msg_buff, 1, 0) == -1) {
-            perror("Error while sending message: ");
-            exit(-1);
-        }
     }
 
 
 
-    //initializing global variables for monitoring number of readers
-    readers_des = shmget(READERS, sizeof(int), IPC_EXCL | IPC_CREAT | O_RDWR | S_IRWXG | S_IRWXU | S_IRWXO);
-
-    if(readers_des < 0) {
-        readers_des = shmget(READERS, sizeof(int), O_RDWR);
-        if(readers_des < 0) {
-            perror("Error while getting readers shared variable ");
-            exit(-1);
-        }
-
-    }
-
-    //getting number of already active clients
-    readers = shmat(readers_des, NULL, 0);
-    //END OF EXCLUSIVE SECTION
-    (*interlocked) = 0;
 
 
 
@@ -552,53 +545,58 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
         (*readers)++;
         printf("Active clients: %d Readers: %d\n", *active_clients, *readers);
         if((*readers) == (*active_clients)) {
+            //blocking on reader mutex
+            pthread_mutex_lock(mutex);
             //restarting readers counter
             (*readers) = 0;
             //emptying socket
             puts("Waiting for data");
             bytes = recvfrom(sock, buffer, 4096, 0, (struct sockaddr*)&sender, &sender_size);
+            //sending messages to waiting clients
+            int i;
+            for(i = 0; i < ((*active_clients)-1); i++) {
+                if(mq_send(msg_queue, msg_buff, 1, 0) == -1) {
+                    perror("Error while sending message: ");
+                    exit(-1);
+                }
+            }
+            pthread_mutex_unlock(mutex);
             (*interlocked) = 0;
-            //sending a message
-            if(mq_send(msg_queue, msg_buff, 1, 0) == -1) {
-                perror("Error while sending message: ");
+            printf("Bytes read: %d\n", bytes);
+            if(bytes == -1) {
+                perror("");
                 exit(-1);
             }
+            if(bytes > 0) {
+                read_info(buffer, &bytes, info, &index);
+//			buffer[4096] = '\0';
+//			printf("%s\n", buffer);
+            }
+
+        }
+        else {
+            (*interlocked) = 0;
+            pthread_mutex_lock(mutex);
+            puts("Waiting for data");
+            //peeking on socket
+            bytes = recvfrom(sock, buffer, 4096, MSG_PEEK, (struct sockaddr*)&sender, &sender_size);
+            pthread_mutex_unlock(mutex);
+            printf("Bytes read: %d\n", bytes);
+            if(bytes == -1) {
+                perror("");
+                exit(-1);
+            }
+            if(bytes > 0) {
+                read_info(buffer, &bytes, info, &index);
+//			buffer[4096] = '\0';
+//			printf("%s\n", buffer);
+            }
+
             //receiving message, HOPE
             if(mq_receive(msg_queue,msg_buff, attr.mq_msgsize, NULL) == -1) {
                 perror("Error while getting message: ");
                 exit(-1);
             }
-
-            printf("Bytes read: %d\n", bytes);
-            if(bytes == -1) {
-                perror("");
-                exit(-1);
-            }
-            if(bytes > 0) {
-                read_info(buffer, &bytes, info, &index);
-//			buffer[4096] = '\0';
-//			printf("%s\n", buffer);
-            }
-            //barrier
-            pthread_cond_broadcast(count_threshold_cv);
-        }
-        else {
-            puts("Waiting for data");
-            //peeking on socket
-            bytes = recvfrom(sock, buffer, 4096, MSG_PEEK, (struct sockaddr*)&sender, &sender_size);
-            (*interlocked) = 0;
-            printf("Bytes read: %d\n", bytes);
-            if(bytes == -1) {
-                perror("");
-                exit(-1);
-            }
-            if(bytes > 0) {
-                read_info(buffer, &bytes, info, &index);
-//			buffer[4096] = '\0';
-//			printf("%s\n", buffer);
-            }
-
-            pthread_cond_wait(count_threshold_cv, mutex);
         }
 
 
