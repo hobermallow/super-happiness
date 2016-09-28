@@ -110,6 +110,9 @@ void send_registration_request(int socket, struct sockaddr_in server, char* opti
             exit(-1);
         }
     }
+    else if(strcmp("-a", option) || strcmp("-A", option)) {
+
+    }
 
 
 
