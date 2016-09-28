@@ -27,6 +27,60 @@
 #include "../utils.h"
 #include <errno.h>
 
+//VARIABLES
+
+//socket to send update
+int send_socket;
+
+/**
+ *
+ * @param socket socket file descriptor
+ * @param server server address
+ * @param option registration option
+ * @param path path to register
+ */
+void send_registration_request(int socket, struct sockaddr_in server, char* option, char* path) {
+    //variables
+
+    //request content
+    char* request;
+    //request header
+    char* header;
+    //initializing request
+    if((request = calloc(strlen(option)+5, 1)) == NULL) {
+        perror("Error while initializing request: ");
+        exit(-1);
+    }
+
+    //select request header
+    if(strcmp("-r", option)) {
+        header = "INFO";
+    }
+    else if(strcmp("-R", option)) {
+        header = "INNR";
+    }
+
+    //copying header at request beginning
+    strcpy(request, header);
+    //copying path after header
+    strcpy(request[5], path);
+
+    //connect to server
+    if(connect(socket, (struct sockaddr*)&server, sizeof(server)) == -1) {
+        perror("Error while connecting to server: ");
+        exit(-1);
+    }
+
+    //send request to server
+    if(send(socket, request, 6+strlen(path), 0) == -1) {
+        perror("Error while sending request to server: ");
+        exit(-1);
+    }
+
+
+
+}
+
 
 /**
  *
@@ -565,6 +619,7 @@ void monitor_updates(conf_file_t* paths, struct sockaddr_in server) {
             printf("Bytes read: %d\n", bytes);
             if(bytes == -1) {
                 perror("");
+                printf("Error code: %d\n", errno);
                 exit(-1);
             }
             if(bytes > 0) {

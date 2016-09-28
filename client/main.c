@@ -216,6 +216,13 @@ int main(int argc, char **argv) {
 
 			//ASK SERVER TO ADD PATH TO CONTROLLED PATH AND/OR REGISTER FOR PATH UPDATES
 
+            //create socket to send request
+            send_socket = create_socket();
+            //send request
+            send_registration_request(send_socket, server, argv[1], argv[2]);
+
+
+
 			//if server accepted registration, we add path to configuration file
 			//adding new registration to the newly created file
 			add_registration_to_conf_file(argv[1], argv[2], conf_file, paths);
