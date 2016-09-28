@@ -177,7 +177,8 @@ int main(int argc, char **argv) {
 	//or create one if it's not passed on
 	//command line
 	if(argc == 4) {
-		//waiting without configuration file
+        printf("4 arguments\n");
+        //waiting without configuration file
 		if(strcmp(argv[1], "-w") == 0) {
 			puts("Cannot wait for updates without configuration file");
 			return -1;
@@ -187,6 +188,7 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	else if(argc == 5) {
+        printf("5 arguments\n");
 		//waiting for updates showing on terminal
 		if(strcmp(argv[1], "-w") == 0) {
 			//setting server address
@@ -236,11 +238,18 @@ int main(int argc, char **argv) {
 		}
 	}
 	else if(argc == 6) {
-		//new registration added to an existing configuration file
+        printf("6 arguments\n");
+        //new registration added to an existing configuration file
 		//checking validity of selected option
 		if(check_option_validity(argv[1])) {
 			//saving server infos
-			convert_ip_to_address(argv[3], &server);
+//			convert_ip_to_address(argv[3], &server);
+            memset(&server, 0, sizeof(server));
+
+            printf("address %s port %s\n", argv[3], argv[4]);
+            server.sin_family = AF_INET;
+//            server.sin_addr.s_addr = inet_addr("127.0.0.1");
+            inet_pton(AF_INET, argv[3], &(server.sin_addr));
 			server.sin_port = htons(atoi(argv[4]));
 			//opening existing configuration file
 			conf_file = open_configuration_file(argv[5]);
@@ -253,7 +262,8 @@ int main(int argc, char **argv) {
 			}
 
 			//ASK SERVER TO ADD PATH TO CONTROLLED PATH AND/OR REGISTER FOR PATH UPDATES
-
+            send_socket = create_tcp_socket();
+            send_registration_request(send_socket, server, argv[1], argv[2]);
 			//adding registration to existing configuration file
 			add_registration_to_conf_file(argv[1], argv[2], conf_file, paths);
 			//parsing configuration file after adding new path

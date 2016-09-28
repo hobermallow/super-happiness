@@ -40,42 +40,79 @@ int send_socket;
  * @param path path to register
  */
 void send_registration_request(int socket, struct sockaddr_in server, char* option, char* path) {
+
+    printf("%s option %s path\n", option, path);
     //variables
 
     //request content
     char* request;
     //request header
     char* header;
+
+    printf("Initializing request... ");
     //initializing request
     if((request = calloc(strlen(option)+5, 1)) == NULL) {
         perror("Error while initializing request: ");
         exit(-1);
     }
+    puts("[OK]");
 
     //select request header
-    if(strcmp("-r", option)) {
-        header = "INFO";
-    }
-    else if(strcmp("-R", option)) {
-        header = "INNR";
+    if(strcmp("-r", option) || strcmp("-R", option)) {
+        if(strcmp("-r", option)) {
+            header = "INFO ";
+        }
+        else {
+            header = "INNR ";
+        }
+        //copying header at request beginning
+        strcpy(request, header);
+        //copying path after header
+        strcpy(&(request[5]), path);
+        printf("Connecting to server... ");
+        //connect to server
+        if(connect(socket, (struct sockaddr*)&server, sizeof(server)) == -1) {
+            if(errno == 111) {
+                printf("Server not listening!!!");
+            }
+            exit(-1);
+        }
+        puts("[OK]");
+
+        //send request to server
+        if(send(socket, request, 6+strlen(path), 0) == -1) {
+            perror("Error while sending request to server: ");
+            exit(-1);
+        }
+        //receive response from server
+        //using request as buffer, reallocating
+        if((request = realloc(request, sizeof(char)*3)) == NULL) {
+            perror("Error while allocating buffer");
+            exit(-1);
+        }
+        //clearing buffer
+        bzero(request, 3);
+        //receiving response
+        if(recv(socket, request, 3, 0) == -1) {
+            perror("Error while receiving response");
+            exit(-1);
+        }
+        if((request[0] == '2') && (request[1] == '0') && (request[2] == '0')) {
+            printf("Request accepted by server\n");
+            return;
+        }
+        else if((request[0] == '4') && (request[1] == '0') && (request[2] == '0')) {
+            printf("Request rejected by server: path is not under controlled directories\n");
+            exit(-1);
+        }
+        else if((request[0] == '4') && (request[1] == '0') && (request[2] == '4')) {
+            printf("Request rejected by server: path doesn't exists\n");
+            exit(-1);
+        }
     }
 
-    //copying header at request beginning
-    strcpy(request, header);
-    //copying path after header
-    strcpy(request[5], path);
 
-    //connect to server
-    if(connect(socket, (struct sockaddr*)&server, sizeof(server)) == -1) {
-        perror("Error while connecting to server: ");
-        exit(-1);
-    }
 
-    //send request to server
-    if(send(socket, request, 6+strlen(path), 0) == -1) {
-        perror("Error while sending request to server: ");
-        exit(-1);
-    }
 
 
 
@@ -136,6 +173,22 @@ int create_socket() {
 	puts("[OK]");
 	//return value of socket fd
 	return s;
+}
+
+int create_tcp_socket() {
+    //defining socket fd
+    int s;
+    printf("Initializing socket... ");
+    //create socket
+    if((s = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        //return -1 if socket is not created
+        printf("[FAIL]\n");
+        puts("Error while creating socket");
+        exit(-1);
+    }
+    puts("[OK]");
+    //return value of socket fd
+    return s;
 }
 
 /**
